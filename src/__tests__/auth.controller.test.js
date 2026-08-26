@@ -21,14 +21,14 @@ describe('Auth API', () => {
     expect(response.body.data.user).not.toHaveProperty('password')
   })
 
-  it('rejects duplicate email registration', async () => {
+  it('rejects duplicate email registration with a conflict response', async () => {
     await request(app).post('/api/v1/auth/register').send(registerPayload())
 
     const response = await request(app)
       .post('/api/v1/auth/register')
       .send(registerPayload({ name: 'Another User' }))
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(409)
     expect(response.body.status).toBe('error')
   })
 
