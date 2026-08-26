@@ -1,90 +1,80 @@
-import request from 'supertest';
-import app from '../app.js';
+import request from 'supertest'
+import app from '../app'
 
-describe('Auth Controller', () => {
-  describe('POST /api/auth/register', () => {
-    it('should register a new user with valid credentials', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'test@example.com',
-          password: 'SecurePassword123!',
-        });
+const registerPayload = (overrides = {}) => ({
+  name: 'Test User',
+  email: 'test@example.com',
+  password: 'SecurePassword123!',
+  ...overrides,
+})
 
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty('token');
-      expect(response.body.user).toHaveProperty('email', 'test@example.com');
-    });
+describe('Auth API', () => {
+  it('registers a user and never returns the password', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/register')
+      .send(registerPayload())
 
-    it('should return 400 if email already exists', async () => {
-      // First registration
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'duplicate@example.com',
-          password: 'SecurePassword123!',
-        });
+    expect(response.status).toBe(201)
+    expect(response.body.status).toBe('success')
+    expect(response.body).toHaveProperty('token')
+    expect(response.body.data.user.email).toBe('test@example.com')
+    expect(response.body.data.user).not.toHaveProperty('password')
+  })
 
-      // Duplicate registration
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Another User',
-          email: 'duplicate@example.com',
-          password: 'AnotherPassword123!',
-        });
+  it('rejects duplicate email registration', async () => {
+    await request(app).post('/api/v1/auth/register').send(registerPayload())
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('message');
-    });
+    const response = await request(app)
+      .post('/api/v1/auth/register')
+      .send(registerPayload({ name: 'Another User' }))
 
-    it('should return 400 if password is too weak', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'weak@example.com',
-          password: '123',
-        });
+    expect(response.status).toBe(400)
+    expect(response.body.status).toBe('error')
+  })
 
-      expect(response.status).toBe(400);
-    });
-  });
+  it('rejects a password shorter than the schema minimum', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/register')
+      .send(registerPayload({ email: 'weak@example.com', password: '123' }))
 
-  describe('POST /api/auth/login', () => {
-    it('should login with valid credentials', async () => {
-      // Register first
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'login@example.com',
-          password: 'SecurePassword123!',
-        });
+    expect(response.status).toBe(400)
+  })
 
-      // Login
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'login@example.com',
-          password: 'SecurePassword123!',
-        });
+  it('logs in with valid credentials', async () => {
+    await request(app)
+      .post('/api/v1/auth/register')
+      .send(registerPayload({ email: 'login@example.com' }))
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('token');
-    });
+    const response = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'login@example.com', password: 'SecurePassword123!' })
 
-    it('should return 401 with invalid credentials', async () => {
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'nonexistent@example.com',
-          password: 'WrongPassword123!',
-        });
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('success')
+    expect(response.body).toHaveProperty('token')
+    expect(response.body.data.user.email).toBe('login@example.com')
+  })
 
-      expect(response.status).toBe(401);
-    });
-  });
-});
+  it('rejects invalid credentials', async () => {
+    const response = await request(app)
+      .post('/api/v1/auth/login')
+      .send({ email: 'nonexistent@example.com', password: 'WrongPassword123!' })
+
+    expect(response.status).toBe(401)
+    expect(response.body.status).toBe('error')
+  })
+
+  it('returns the authenticated user for a valid bearer token', async () => {
+    const registration = await request(app)
+      .post('/api/v1/auth/register')
+      .send(registerPayload({ email: 'me@example.com' }))
+
+    const response = await request(app)
+      .get('/api/v1/auth/me')
+      .set('Authorization', `Bearer ${registration.body.token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.data.user.email).toBe('me@example.com')
+    expect(response.body.data.user).not.toHaveProperty('password')
+  })
+})
