@@ -1,90 +1,107 @@
-import request from 'supertest';
-import app from '../app.js';
+const mongoose = require('mongoose')
+const request = require('supertest')
+const app = require('../app')
+const User = require('../models/User.model')
+const Transaction = require('../models/Transaction.model')
 
-describe('Auth Controller', () => {
-  describe('POST /api/auth/register', () => {
-    it('should register a new user with valid credentials', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'test@example.com',
-          password: 'SecurePassword123!',
-        });
+const mongoUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/finance-tracker-test'
 
-      expect(response.status).toBe(201);
-      expect(response.body).toHaveProperty('token');
-      expect(response.body.user).toHaveProperty('email', 'test@example.com');
-    });
+describe('Finance Tracker API', () => {
+  beforeAll(async () => {
+    await mongoose.connect(mongoUri)
+  })
 
-    it('should return 400 if email already exists', async () => {
-      // First registration
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'duplicate@example.com',
-          password: 'SecurePassword123!',
-        });
+  beforeEach(async () => {
+    await Promise.all([User.deleteMany({}), Transaction.deleteMany({})])
+  })
 
-      // Duplicate registration
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Another User',
-          email: 'duplicate@example.com',
-          password: 'AnotherPassword123!',
-        });
+  afterAll(async () => {
+    await mongoose.connection.dropDatabase()
+    await mongoose.disconnect()
+  })
 
-      expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('message');
-    });
+  it('exposes a health check', async () => {
+    const response = await request(app).get('/health')
 
-    it('should return 400 if password is too weak', async () => {
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'weak@example.com',
-          password: '123',
-        });
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('ok')
+  })
 
-      expect(response.status).toBe(400);
-    });
-  });
+  it('registers a user and returns a JWT session', async () => {
+    const response = await request(app).post('/api/v1/auth/register').send({
+      name: 'Test User',
+      email: 'test@example.com',
+      password: 'SecurePassword123!',
+      currency: 'BRL',
+      monthlyBudget: 5000,
+    })
 
-  describe('POST /api/auth/login', () => {
-    it('should login with valid credentials', async () => {
-      // Register first
-      await request(app)
-        .post('/api/auth/register')
-        .send({
-          name: 'Test User',
-          email: 'login@example.com',
-          password: 'SecurePassword123!',
-        });
+    expect(response.status).toBe(201)
+    expect(response.body.status).toBe('success')
+    expect(response.body).toHaveProperty('token')
+    expect(response.body.data.user).toHaveProperty('email', 'test@example.com')
+    expect(response.body.data.user).not.toHaveProperty('password')
+  })
 
-      // Login
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'login@example.com',
-          password: 'SecurePassword123!',
-        });
+  it('rejects a duplicate e-mail with a conflict response', async () => {
+    const payload = {
+      name: 'Test User',
+      email: 'duplicate@example.com',
+      password: 'SecurePassword123!',
+    }
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('token');
-    });
+    await request(app).post('/api/v1/auth/register').send(payload)
+    const response = await request(app).post('/api/v1/auth/register').send(payload)
 
-    it('should return 401 with invalid credentials', async () => {
-      const response = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'nonexistent@example.com',
-          password: 'WrongPassword123!',
-        });
+    expect(response.status).toBe(409)
+    expect(response.body.status).toBe('error')
+  })
 
-      expect(response.status).toBe(401);
-    });
-  });
-});
+  it('rejects weak passwords through model validation', async () => {
+    const response = await request(app).post('/api/v1/auth/register').send({
+      name: 'Test User',
+      email: 'weak@example.com',
+      password: '123',
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  it('logs in with valid credentials and rejects invalid ones', async () => {
+    await request(app).post('/api/v1/auth/register').send({
+      name: 'Login User',
+      email: 'login@example.com',
+      password: 'SecurePassword123!',
+    })
+
+    const success = await request(app).post('/api/v1/auth/login').send({
+      email: 'login@example.com',
+      password: 'SecurePassword123!',
+    })
+    expect(success.status).toBe(200)
+    expect(success.body).toHaveProperty('token')
+
+    const failure = await request(app).post('/api/v1/auth/login').send({
+      email: 'login@example.com',
+      password: 'WrongPassword123!',
+    })
+    expect(failure.status).toBe(401)
+  })
+
+  it('serves an authenticated monthly summary', async () => {
+    const register = await request(app).post('/api/v1/auth/register').send({
+      name: 'Summary User',
+      email: 'summary@example.com',
+      password: 'SecurePassword123!',
+      monthlyBudget: 3000,
+    })
+
+    const response = await request(app)
+      .get('/api/v1/summary/monthly?year=2026&month=8')
+      .set('Authorization', `Bearer ${register.body.token}`)
+
+    expect(response.status).toBe(200)
+    expect(response.body.status).toBe('success')
+    expect(response.body.data).toMatchObject({ income: 0, expense: 0, balance: 0, transactionCount: 0 })
+  })
+})
