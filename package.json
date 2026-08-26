@@ -1,14 +1,14 @@
 {
   "name": "finance-tracker-api",
   "version": "1.0.0",
-  "description": "API REST robusta para controle financeiro pessoal com Node.js, Express e MongoDB",
+  "description": "API REST para controle financeiro pessoal com Node.js, Express e MongoDB",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "jest --forceExit",
+    "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage --forceExit",
+    "test:coverage": "jest --coverage",
     "docker:build": "docker build -t finance-tracker-api .",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down"
@@ -41,5 +41,8 @@
     "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2"
+  },
+  "overrides": {
+    "ip-address": "^10.3.1"
   }
 }

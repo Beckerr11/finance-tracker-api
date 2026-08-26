@@ -1,286 +1,167 @@
 # Finance Tracker API
 
-Uma API REST robusta e escalável para controle financeiro pessoal, construída com **Node.js**, **Express** e **MongoDB**. Perfeita para demonstrar conhecimento de backend profissional.
+API REST de controle financeiro pessoal construída com **Node.js, Express 5, MongoDB/Mongoose e JWT**. O foco deste repositório é demonstrar backend com autenticação, isolamento por usuário, agregações financeiras e um pipeline de qualidade reproduzível.
 
-## 🎯 Características
+## O que está implementado
 
-- **Autenticação JWT** com tokens de acesso e refresh tokens
-- **CRUD completo** de transações (receitas e despesas)
-- **Agregações MongoDB** para resumos e análises financeiras
-- **Filtros avançados** por período, categoria, tipo de transação
-- **Paginação** eficiente para grandes volumes de dados
-- **Validação robusta** com express-validator
-- **Segurança** com helmet, CORS, rate limiting
-- **Tratamento de erros** centralizado e padronizado
-- **Testes unitários** com Jest
+### Autenticação
+- cadastro de usuário;
+- login com e-mail e senha;
+- hash de senha com bcrypt;
+- JWT com expiração configurável;
+- endpoint autenticado `/me`;
+- proteção de rotas via Bearer token;
+- conflito `409` para e-mail duplicado.
 
-## 🚀 Stack Tecnológico
+### Transações
+- criação, leitura, atualização e remoção de receitas/despesas;
+- vínculo obrigatório ao usuário autenticado;
+- filtros por tipo, categoria e período;
+- paginação e ordenação;
+- campos como tags, recorrência e data.
 
-| Camada | Tecnologia |
-|--------|-----------|
-| **Runtime** | Node.js 18+ |
-| **Framework** | Express.js |
-| **Banco de Dados** | MongoDB + Mongoose |
-| **Autenticação** | JWT (jsonwebtoken) |
-| **Validação** | express-validator |
-| **Segurança** | helmet, CORS, bcryptjs, rate-limit |
-| **Testes** | Jest, Supertest |
-| **Dev Tools** | Nodemon |
+### Resumos financeiros
+- resumo mensal;
+- breakdown por categoria;
+- visão anual;
+- pipelines de agregação no MongoDB.
 
-## 📋 Instalação
+### Camada HTTP
+- Helmet;
+- CORS configurável;
+- rate limiting nas rotas `/api`;
+- limite de payload JSON;
+- tratamento de erros centralizado;
+- health check em `/health`;
+- fallback `404` compatível com Express 5.
+
+## Stack
+
+| Área | Tecnologia |
+| --- | --- |
+| Runtime | Node.js 24 no CI |
+| API | Express 5 |
+| Banco | MongoDB + Mongoose |
+| Auth | JWT + bcryptjs |
+| Validação | express-validator |
+| Segurança HTTP | Helmet, CORS, express-rate-limit |
+| Testes | Jest + Supertest |
+| Infra | Docker + GitHub Actions |
+
+## Executando localmente
 
 ```bash
-# Clone o repositório
 git clone https://github.com/Beckerr11/finance-tracker-api.git
 cd finance-tracker-api
-
-# Instale as dependências
-npm install
-
-# Configure as variáveis de ambiente
+npm ci
 cp .env.example .env
-
-# Inicie o servidor
 npm start
 ```
 
-## ⚙️ Variáveis de Ambiente
-
-Crie um arquivo `.env` na raiz do projeto:
+Exemplo de ambiente:
 
 ```env
 PORT=3001
-MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/finance-tracker
-JWT_SECRET=sua_chave_secreta_super_segura_aqui
+MONGODB_URI=mongodb://127.0.0.1:27017/finance-tracker
+JWT_SECRET=troque-por-um-segredo-forte
 JWT_EXPIRES_IN=7d
 NODE_ENV=development
 ALLOWED_ORIGIN=http://localhost:3000
 ```
 
-## 📚 Documentação da API
+Nenhuma credencial real deve ser versionada.
 
-### Autenticação
+## Contrato principal
 
-#### Registrar novo usuário
-```http
+### Auth
+
+```text
 POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "name": "Douglas Silva",
-  "email": "douglas@example.com",
-  "password": "senha123",
-  "currency": "BRL",
-  "monthlyBudget": 5000
-}
-```
-
-**Resposta (201):**
-```json
-{
-  "status": "success",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "data": {
-    "user": {
-      "_id": "507f1f77bcf86cd799439011",
-      "name": "Douglas Silva",
-      "email": "douglas@example.com",
-      "currency": "BRL",
-      "monthlyBudget": 5000
-    }
-  }
-}
-```
-
-#### Login
-```http
 POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "douglas@example.com",
-  "password": "senha123"
-}
+GET  /api/v1/auth/me
 ```
 
-### Transações
+### Transactions
 
-#### Criar transação
-```http
-POST /api/v1/transactions
-Authorization: Bearer {token}
-Content-Type: application/json
-
-{
-  "type": "expense",
-  "amount": 150.50,
-  "description": "Compras no supermercado",
-  "category": "Alimentação",
-  "date": "2024-06-24",
-  "tags": ["groceries", "weekly"],
-  "isRecurring": false
-}
+```text
+POST   /api/v1/transactions
+GET    /api/v1/transactions
+GET    /api/v1/transactions/:id
+PATCH  /api/v1/transactions/:id
+DELETE /api/v1/transactions/:id
 ```
 
-#### Listar transações com filtros
-```http
-GET /api/v1/transactions?type=expense&category=Alimentação&page=1&limit=20&sort=-date
-Authorization: Bearer {token}
+### Summary
+
+```text
+GET /api/v1/summary/monthly
+GET /api/v1/summary/category
+GET /api/v1/summary/yearly
 ```
 
-**Query Parameters:**
-- `type` — `income` ou `expense`
-- `category` — Nome da categoria
-- `startDate` — Data inicial (YYYY-MM-DD)
-- `endDate` — Data final (YYYY-MM-DD)
-- `page` — Número da página (padrão: 1)
-- `limit` — Itens por página (padrão: 20)
-- `sort` — Campo para ordenação (ex: `-date`, `amount`)
+As rotas de transações e resumo exigem autenticação.
 
-#### Obter resumo mensal
-```http
-GET /api/v1/summary/monthly?year=2024&month=6
-Authorization: Bearer {token}
+## Verificação automatizada
+
+O workflow de CI sobe um **MongoDB 7 isolado** e executa:
+
+```text
+npm ci
+→ testes Jest/Supertest
+→ npm audit --omit=dev --audit-level=high
+→ docker build
 ```
 
-**Resposta:**
-```json
-{
-  "status": "success",
-  "data": {
-    "period": { "year": 2024, "month": 6 },
-    "income": 5000,
-    "expense": 2150.50,
-    "balance": 2849.50,
-    "savingsRate": "56.99",
-    "transactionCount": 42,
-    "monthlyBudget": 5000,
-    "budgetUsed": "43.01"
-  }
-}
-```
+A suíte de autenticação verifica cadastro, senha fora da resposta, e-mail duplicado, validação de senha, login válido/inválido e acesso autenticado a `/me`.
 
-#### Análise por categoria
-```http
-GET /api/v1/summary/category?year=2024&month=6&type=expense
-Authorization: Bearer {token}
-```
+O repositório também fixa uma versão corrigida de `ip-address` por `overrides` para não aceitar a cadeia vulnerável reportada pelo npm audit.
 
-## 🏗️ Arquitetura
+## Arquitetura
 
-```
+```text
 src/
-├── app.js                 # Configuração do Express
-├── server.js              # Entry point
-├── controllers/           # Lógica de negócio
+├── app.js
+├── server.js
+├── controllers/
 │   ├── auth.controller.js
 │   ├── transaction.controller.js
 │   └── summary.controller.js
-├── models/                # Schemas MongoDB
+├── models/
 │   ├── User.model.js
 │   └── Transaction.model.js
-├── routes/                # Definição de rotas
+├── routes/
 │   ├── auth.routes.js
 │   ├── transaction.routes.js
 │   └── summary.routes.js
-└── middlewares/           # Middlewares customizados
-    ├── auth.middleware.js
-    └── error.middleware.js
+├── middlewares/
+│   ├── auth.middleware.js
+│   └── error.middleware.js
+└── __tests__/
+    ├── auth.controller.test.js
+    └── setup.js
 ```
 
-### Padrões de Código
+## Decisões e limites
 
-**Tratamento de Erros Centralizado:**
-Todos os controllers usam `catchAsync` para envolver funções assíncronas e capturar erros automaticamente:
+- O projeto usa **um access token JWT**; refresh token não é apresentado como recurso atual.
+- Conversão automática de moedas, integração bancária e frontend não fazem parte desta versão.
+- O CI testa diretamente o fluxo de autenticação; transações e agregações existem no código, mas ampliar a cobertura automatizada dessas áreas permanece uma evolução desejável.
+- A configuração de produção depende de uma instância MongoDB e de segredos fornecidos pelo ambiente.
 
-```javascript
-exports.createTransaction = catchAsync(async (req, res, next) => {
-  const transaction = await Transaction.create({ ...req.body, user: req.user._id })
-  res.status(201).json({ status: 'success', data: { transaction } })
-})
-```
+## Roadmap
 
-**Autenticação com JWT:**
-Middleware `protect` valida o token em todas as rotas protegidas:
+- ampliar testes HTTP para CRUD de transações e agregações;
+- metas e alertas de gastos;
+- múltiplas moedas;
+- observabilidade;
+- frontend separado;
+- deploy público de demonstração.
 
-```javascript
-router.use(protect) // Todas as rotas abaixo requerem autenticação
-```
+## Autor
 
-## 🧪 Testes
+**Douglas Silva**  
+[GitHub](https://github.com/Beckerr11) · [Portfólio](https://douglasdev.tech)
 
-```bash
-# Rodar todos os testes
-npm test
+## Licença
 
-# Rodar com cobertura
-npm run test:coverage
-
-# Modo watch
-npm run test:watch
-```
-
-## 📊 Agregações MongoDB
-
-A API usa `aggregation pipelines` do MongoDB para análises eficientes:
-
-- **Resumo Mensal:** Agrupa transações por tipo (income/expense)
-- **Breakdown por Categoria:** Calcula percentuais e totais por categoria
-- **Overview Anual:** Mostra tendências mês a mês
-
-Exemplo de pipeline:
-```javascript
-db.transactions.aggregate([
-  { $match: { user: ObjectId("..."), date: { $gte: startDate } } },
-  { $group: { _id: "$category", total: { $sum: "$amount" } } },
-  { $sort: { total: -1 } }
-])
-```
-
-## 🔒 Segurança
-
-- ✅ Senhas com hash bcrypt (12 rounds)
-- ✅ JWT com expiração configurável
-- ✅ CORS restritivo
-- ✅ Helmet para headers de segurança
-- ✅ Rate limiting (100 req/15min)
-- ✅ Validação de entrada com express-validator
-- ✅ Isolamento de dados por usuário
-
-## 🚢 Deploy
-
-### Render (Backend)
-```bash
-# Conecte seu repositório GitHub ao Render
-# Configure as variáveis de ambiente no painel
-# Deploy automático a cada push para main
-```
-
-### MongoDB Atlas (Banco de Dados)
-```bash
-# Crie um cluster gratuito em mongodb.com/cloud
-# Gere uma connection string
-# Adicione à variável MONGODB_URI
-```
-
-## 📈 Próximos Passos
-
-- [ ] Adicionar suporte a múltiplas moedas com conversão automática
-- [ ] Implementar metas e alertas de gastos
-- [ ] Adicionar integração com Plaid para importar transações bancárias
-- [ ] Criar dashboard com gráficos (frontend React)
-- [ ] Implementar backup automático de dados
-
-## 👨‍💻 Autor
-
-**Douglas Silva** — Desenvolvedor Full Stack Júnior  
-📧 douglasaparecidodasilva@gmail.com  
-🔗 [GitHub](https://github.com/Beckerr11) | [Portfolio](https://douglasdev.tech)
-
-## 📄 Licença
-
-MIT License — Sinta-se livre para usar este projeto como referência ou base para seus próprios projetos.
-
----
-
-**Desenvolvido com ❤️ para demonstrar conhecimento de backend profissional**
+MIT.
